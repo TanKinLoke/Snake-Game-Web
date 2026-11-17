@@ -1,0 +1,6 @@
+{
+  "name": "Orchard Snake",
+  "description": "A responsive, zero-dependency HTML5 Canvas Snake arcade game with crisp high-DPI inline SVG sprites, synthesized Web Audio effects, and mobile touch controls.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
