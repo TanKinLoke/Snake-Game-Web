@@ -10,7 +10,6 @@ export class SnakeGame {
   static BEST_SCORE_KEY = 'snake_best_score';
   static BEST_SCORE_PREFIX = 'snake_best_score_';
   static DIFFICULTY_KEY = 'snake_difficulty';
-  static PLAYER_NAME_KEY = 'snake_player_name';
   static HIGH_CONTRAST_KEY = 'snake_high_contrast';
   static SCREEN_SHAKE_KEY = 'snake_screen_shake';
   static PARTICLE_POOL_SIZE = 48;
@@ -142,14 +141,6 @@ export class SnakeGame {
     this.particleCursor = 0;
     this.shakeTrauma = 0;
 
-    this.leaderboardOpen = false;
-    this.leaderboardFilter = 'all';
-    this.scoreSubmitted = false;
-    this.submittingScore = false;
-    this.submitMessage = '';
-    this.submitIsError = false;
-    this.stateBeforeLeaderboard = null;
-
     this.audioCtx = null;
     this.sprites = { apple: null, goldenApple: null, head: null, headHc: null };
     this.touchStart = null;
@@ -239,10 +230,6 @@ export class SnakeGame {
     this.isWin = false;
     this.goldenApple = null;
     this.shakeTrauma = 0;
-    this.scoreSubmitted = false;
-    this.submittingScore = false;
-    this.submitMessage = '';
-    this.submitIsError = false;
     for (const p of this.particles) {
       p.active = false;
     }
@@ -255,10 +242,6 @@ export class SnakeGame {
     }
     if (fromUserGesture) {
       this.#unlockAudio();
-    }
-    this.leaderboardOpen = false;
-    if (this.dom.leaderboardModal) {
-      this.dom.leaderboardModal.hidden = true;
     }
     this.bestScore = this.bestScores[this.difficulty] || 0;
     this.runStartBestScore = this.bestScore;
@@ -653,7 +636,6 @@ export class SnakeGame {
       scoreValue: document.getElementById('score-value'),
       bestLabel: document.getElementById('best-label'),
       bestValue: document.getElementById('best-value'),
-      leaderboardBtn: document.getElementById('leaderboard-btn'),
       muteBtn: document.getElementById('mute-btn'),
       iconSoundOn: document.getElementById('icon-sound-on'),
       iconSoundOff: document.getElementById('icon-sound-off'),
@@ -671,10 +653,6 @@ export class SnakeGame {
       finalScoreValue: document.getElementById('final-score-value'),
       finalBestLabel: document.getElementById('final-best-label'),
       finalBestValue: document.getElementById('final-best-value'),
-      leaderboardForm: document.getElementById('leaderboard-form'),
-      playerNameInput: document.getElementById('player-name-input'),
-      submitScoreBtn: document.getElementById('submit-score-btn'),
-      submitFeedback: document.getElementById('submit-feedback'),
       primaryCta: document.getElementById('primary-cta'),
       secondaryCta: document.getElementById('secondary-cta'),
       difficultyPicker: document.getElementById('difficulty-picker'),
@@ -684,19 +662,10 @@ export class SnakeGame {
       contrastToggle: document.getElementById('contrast-toggle'),
       shakeToggle: document.getElementById('shake-toggle'),
       controlHints: document.getElementById('control-hints'),
-      leaderboardModal: document.getElementById('leaderboard-modal'),
-      closeLeaderboardBtn: document.getElementById('close-leaderboard-btn'),
-      filterButtons: Array.from(document.querySelectorAll('.filter-btn')),
-      leaderboardStatus: document.getElementById('leaderboard-status'),
-      leaderboardTable: document.getElementById('leaderboard-table'),
-      leaderboardTbody: document.getElementById('leaderboard-tbody'),
       dpadButtons: Array.from(document.querySelectorAll('.dpad-btn')),
     };
     if (this.dom.canvas) {
       this.ctx = this.dom.canvas.getContext('2d');
-    }
-    if (this.dom.playerNameInput) {
-      this.dom.playerNameInput.value = this.#loadPlayerName();
     }
   }
 
@@ -732,38 +701,6 @@ export class SnakeGame {
     if (this.dom.secondaryCta) {
       this.dom.secondaryCta.addEventListener('click', () => {
         this.startGame();
-      });
-    }
-
-    if (this.dom.leaderboardBtn) {
-      this.dom.leaderboardBtn.addEventListener('click', () => {
-        this.#unlockAudio();
-        if (this.leaderboardOpen) {
-          this.closeLeaderboard();
-        } else {
-          this.openLeaderboard();
-        }
-        this.dom.leaderboardBtn.blur();
-      });
-    }
-
-    if (this.dom.closeLeaderboardBtn) {
-      this.dom.closeLeaderboardBtn.addEventListener('click', () => {
-        this.closeLeaderboard();
-      });
-    }
-
-    for (const btn of this.dom.filterButtons) {
-      btn.addEventListener('click', () => {
-        this.setLeaderboardFilter(btn.dataset.filter || 'all');
-      });
-    }
-
-    if (this.dom.leaderboardForm) {
-      this.dom.leaderboardForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const name = this.dom.playerNameInput ? this.dom.playerNameInput.value : '';
-        this.submitScoreToServer(name);
       });
     }
 
@@ -818,33 +755,9 @@ export class SnakeGame {
   #handleKeyDown(e) {
     const key = e.key;
     const lower = key.toLowerCase();
-    const isTextInput =
-      e.target instanceof HTMLInputElement ||
-      e.target instanceof HTMLTextAreaElement;
-
-    if (this.leaderboardOpen) {
-      if (key === 'Escape') {
-        e.preventDefault();
-        this.closeLeaderboard();
-      }
-      return;
-    }
-
-    if (isTextInput) {
-      if (key === 'Escape') {
-        e.target.blur();
-      }
-      return;
-    }
 
     if (key === 'ArrowUp' || key === 'ArrowDown' || key === 'ArrowLeft' || key === 'ArrowRight' || key === ' ') {
       e.preventDefault();
-    }
-
-    if (lower === 'l') {
-      this.#unlockAudio();
-      this.openLeaderboard();
-      return;
     }
 
     if (lower === 'm') {
@@ -1239,7 +1152,6 @@ export class SnakeGame {
       this.dom.overlayEmblem.hidden = false;
       this.dom.newBestBadge.hidden = true;
       this.dom.overlayStats.hidden = true;
-      if (this.dom.leaderboardForm) this.dom.leaderboardForm.hidden = true;
       if (this.dom.difficultyPicker) this.dom.difficultyPicker.hidden = false;
       if (this.dom.visualOptions) this.dom.visualOptions.hidden = false;
       this.dom.secondaryCta.hidden = true;
@@ -1251,12 +1163,11 @@ export class SnakeGame {
         : 'Loading Sprites...';
       this.dom.primaryCta.disabled = !this.spritesLoaded;
       this.dom.controlHints.textContent =
-        'Arrows / WASD Move · Space / P Pause · L Leaderboard';
+        'Arrows / WASD Move · Space / P Pause · M Mute';
     } else if (this.state === SnakeGame.STATES.PAUSED) {
       this.dom.overlayEmblem.hidden = true;
       this.dom.newBestBadge.hidden = true;
       this.dom.overlayStats.hidden = false;
-      if (this.dom.leaderboardForm) this.dom.leaderboardForm.hidden = true;
       if (this.dom.difficultyPicker) this.dom.difficultyPicker.hidden = true;
       if (this.dom.visualOptions) this.dom.visualOptions.hidden = false;
       this.dom.finalScoreValue.textContent = String(this.score);
@@ -1279,22 +1190,6 @@ export class SnakeGame {
       this.dom.overlayStats.hidden = false;
       if (this.dom.difficultyPicker) this.dom.difficultyPicker.hidden = false;
       if (this.dom.visualOptions) this.dom.visualOptions.hidden = true;
-      if (this.dom.leaderboardForm) {
-        this.dom.leaderboardForm.hidden = this.score <= 0;
-      }
-      if (this.dom.submitScoreBtn) {
-        this.dom.submitScoreBtn.disabled = this.scoreSubmitted || this.submittingScore;
-        this.dom.submitScoreBtn.textContent = this.scoreSubmitted
-          ? 'Saved'
-          : this.submittingScore
-            ? 'Saving...'
-            : 'Save Score';
-      }
-      if (this.dom.submitFeedback) {
-        this.dom.submitFeedback.hidden = !this.submitMessage;
-        this.dom.submitFeedback.textContent = this.submitMessage;
-        this.dom.submitFeedback.classList.toggle('is-error', this.submitIsError);
-      }
       this.dom.finalScoreValue.textContent = String(this.score);
       if (this.dom.finalBestLabel) {
         this.dom.finalBestLabel.textContent = `Best (${cfg.label})`;
@@ -1304,7 +1199,7 @@ export class SnakeGame {
       this.dom.overlayTitle.textContent = this.isWin ? 'Orchard Mastered!' : 'Game Over';
       this.dom.overlaySubtitle.textContent = this.isWin
         ? 'You filled every tile on the board!'
-        : 'You crashed! Save your score or try another run.';
+        : 'You crashed! Better luck next run.';
       this.dom.primaryCta.textContent = 'Play Again';
       this.dom.primaryCta.disabled = false;
       this.dom.controlHints.textContent =
@@ -1342,149 +1237,6 @@ export class SnakeGame {
   #applyHighContrastClass() {
     if (this.headless || typeof document === 'undefined' || !document.body) return;
     document.body.classList.toggle('high-contrast', this.highContrast);
-  }
-
-  async openLeaderboard() {
-    if (this.headless || !this.dom.leaderboardModal) return;
-    if (this.state === SnakeGame.STATES.PLAYING) {
-      this.stateBeforeLeaderboard = SnakeGame.STATES.PLAYING;
-      this.pauseGame();
-    } else {
-      this.stateBeforeLeaderboard = null;
-    }
-    this.leaderboardOpen = true;
-    this.dom.leaderboardModal.hidden = false;
-    this.#syncLeaderboardFilterUi();
-    await this.fetchLeaderboard();
-  }
-
-  closeLeaderboard() {
-    if (this.headless || !this.dom.leaderboardModal) return;
-    this.leaderboardOpen = false;
-    this.dom.leaderboardModal.hidden = true;
-    if (this.stateBeforeLeaderboard === SnakeGame.STATES.PLAYING) {
-      this.stateBeforeLeaderboard = null;
-      this.resumeGame();
-    }
-  }
-
-  setLeaderboardFilter(filter) {
-    const valid = filter === 'all' || Object.prototype.hasOwnProperty.call(SnakeGame.DIFFICULTIES, filter);
-    this.leaderboardFilter = valid ? filter : 'all';
-    this.#syncLeaderboardFilterUi();
-    this.fetchLeaderboard();
-  }
-
-  #syncLeaderboardFilterUi() {
-    if (!this.dom.filterButtons) return;
-    for (const btn of this.dom.filterButtons) {
-      btn.setAttribute('aria-pressed', String(btn.dataset.filter === this.leaderboardFilter));
-    }
-  }
-
-  async fetchLeaderboard() {
-    if (this.headless || !this.dom.leaderboardStatus || !this.dom.leaderboardTable || !this.dom.leaderboardTbody) {
-      return;
-    }
-
-    this.dom.leaderboardStatus.hidden = false;
-    this.dom.leaderboardStatus.textContent = 'Loading scores...';
-    this.dom.leaderboardTable.hidden = true;
-
-    try {
-      const response = await fetch(
-        `/api/leaderboard?difficulty=${encodeURIComponent(this.leaderboardFilter)}&limit=20`
-      );
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      const data = await response.json();
-      const entries = Array.isArray(data.entries) ? data.entries : [];
-
-      if (entries.length === 0) {
-        this.dom.leaderboardStatus.hidden = false;
-        this.dom.leaderboardStatus.textContent = 'No scores recorded yet for this mode.';
-        this.dom.leaderboardTable.hidden = true;
-        return;
-      }
-
-      this.dom.leaderboardTbody.replaceChildren();
-      entries.forEach((entry, index) => {
-        const row = document.createElement('tr');
-        const rankCell = document.createElement('td');
-        rankCell.textContent = String(index + 1);
-
-        const nameCell = document.createElement('td');
-        nameCell.textContent = String(entry.playerName || 'Player');
-
-        const modeCell = document.createElement('td');
-        modeCell.className = 'col-mode';
-        modeCell.textContent = String(entry.difficulty || 'normal');
-
-        const scoreCell = document.createElement('td');
-        scoreCell.className = 'col-score';
-        scoreCell.textContent = String(entry.score ?? 0);
-
-        row.append(rankCell, nameCell, modeCell, scoreCell);
-        this.dom.leaderboardTbody.appendChild(row);
-      });
-
-      this.dom.leaderboardStatus.hidden = true;
-      this.dom.leaderboardTable.hidden = false;
-    } catch {
-      this.dom.leaderboardStatus.hidden = false;
-      this.dom.leaderboardStatus.textContent = 'Unable to reach server leaderboard.';
-      this.dom.leaderboardTable.hidden = true;
-    }
-  }
-
-  async submitScoreToServer(rawName) {
-    if (this.headless || this.scoreSubmitted || this.submittingScore || this.score <= 0) {
-      return;
-    }
-
-    const playerName = String(rawName || '').trim().slice(0, 20);
-    if (!playerName) {
-      this.submitMessage = 'Please enter your name first.';
-      this.submitIsError = true;
-      this.#syncOverlay();
-      return;
-    }
-
-    this.#savePlayerName(playerName);
-    this.submittingScore = true;
-    this.submitMessage = '';
-    this.submitIsError = false;
-    this.#syncOverlay();
-
-    try {
-      const response = await fetch('/api/leaderboard', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          playerName,
-          score: this.score,
-          difficulty: this.difficulty,
-          apples: this.applesEaten,
-        }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload.error || `HTTP ${response.status}`);
-      }
-
-      this.scoreSubmitted = true;
-      this.submittingScore = false;
-      const cfg = this.getDifficultyConfig();
-      this.submitMessage = `Saved! Ranked #${payload.rank} on ${cfg.label}.`;
-      this.submitIsError = false;
-      this.#syncOverlay();
-    } catch (err) {
-      this.submittingScore = false;
-      this.submitMessage = err instanceof Error ? err.message : 'Failed to save score.';
-      this.submitIsError = true;
-      this.#syncOverlay();
-    }
   }
 
   #blurActiveElement() {
@@ -1585,24 +1337,6 @@ export class SnakeGame {
       this.storage.setItem(SnakeGame.DIFFICULTY_KEY, mode);
     } catch {
       // Ignore storage errors in private browsing mode
-    }
-  }
-
-  #loadPlayerName() {
-    try {
-      if (!this.storage) return '';
-      return String(this.storage.getItem(SnakeGame.PLAYER_NAME_KEY) || '').slice(0, 20);
-    } catch {
-      return '';
-    }
-  }
-
-  #savePlayerName(name) {
-    try {
-      if (!this.storage) return;
-      this.storage.setItem(SnakeGame.PLAYER_NAME_KEY, name);
-    } catch {
-      // Ignore storage errors
     }
   }
 

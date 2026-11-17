@@ -45,18 +45,6 @@
 
         <div class="hud-actions">
           <button
-            id="leaderboard-btn"
-            class="icon-btn"
-            type="button"
-            aria-label="Leaderboard"
-            title="Leaderboard (L)"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 13h4v7H4zM10 6h4v14h-4zM16 10h4v10h-4z" fill="currentColor" />
-            </svg>
-          </button>
-
-          <button
             id="mute-btn"
             class="icon-btn"
             type="button"
@@ -139,25 +127,6 @@
                 </div>
               </div>
 
-              <form id="leaderboard-form" class="leaderboard-form" hidden>
-                <div class="leaderboard-input-row">
-                  <label class="sr-only" for="player-name-input">Player name</label>
-                  <input
-                    id="player-name-input"
-                    class="name-input"
-                    type="text"
-                    maxlength="20"
-                    autocomplete="nickname"
-                    placeholder="Player name"
-                    required
-                  />
-                  <button id="submit-score-btn" class="btn-save" type="submit">
-                    Save Score
-                  </button>
-                </div>
-                <p id="submit-feedback" class="submit-feedback" hidden></p>
-              </form>
-
               <div id="difficulty-picker" class="difficulty-picker" role="group" aria-label="Difficulty">
                 <div class="difficulty-segmented">
                   <button
@@ -230,55 +199,8 @@
               </div>
 
               <p id="control-hints" class="control-hints">
-                Arrows / WASD Move · Space / P Pause · Enter Start
+                Arrows / WASD Move · Space / P Pause · M Mute
               </p>
-            </div>
-          </div>
-
-          <div
-            id="leaderboard-modal"
-            class="overlay"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="leaderboard-title"
-            hidden
-          >
-            <div class="overlay-card leaderboard-card">
-              <div class="leaderboard-header">
-                <h2 id="leaderboard-title" class="leaderboard-title">Leaderboard</h2>
-                <button
-                  id="close-leaderboard-btn"
-                  class="icon-btn icon-btn-sm"
-                  type="button"
-                  aria-label="Close leaderboard"
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-                  </svg>
-                </button>
-              </div>
-
-              <div class="leaderboard-filters" role="group" aria-label="Filter leaderboard by difficulty">
-                <button type="button" class="filter-btn" data-filter="all" aria-pressed="true">All</button>
-                <button type="button" class="filter-btn" data-filter="casual" aria-pressed="false">Casual</button>
-                <button type="button" class="filter-btn" data-filter="normal" aria-pressed="false">Normal</button>
-                <button type="button" class="filter-btn" data-filter="hard" aria-pressed="false">Hard</button>
-              </div>
-
-              <div id="leaderboard-list-wrap" class="leaderboard-list-wrap">
-                <p id="leaderboard-status" class="leaderboard-status">Loading scores...</p>
-                <table id="leaderboard-table" class="leaderboard-table" hidden>
-                  <thead>
-                    <tr>
-                      <th scope="col">#</th>
-                      <th scope="col">Player</th>
-                      <th scope="col">Mode</th>
-                      <th scope="col" class="col-score">Score</th>
-                    </tr>
-                  </thead>
-                  <tbody id="leaderboard-tbody"></tbody>
-                </table>
-              </div>
             </div>
           </div>
         </div>
