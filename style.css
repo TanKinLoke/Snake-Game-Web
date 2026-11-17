@@ -159,6 +159,16 @@ body {
   height: 20px;
 }
 
+.lang-btn {
+  width: auto;
+  min-width: 44px;
+  padding: 0 10px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .icon-btn:hover:not(:disabled) {
   background-color: #233d31;
   border-color: var(--border-strong);
@@ -599,6 +609,13 @@ body {
   .icon-btn svg {
     width: 18px;
     height: 18px;
+  }
+
+  .lang-btn {
+    width: auto;
+    min-width: 38px;
+    padding: 0 8px;
+    font-size: 12px;
   }
 
   .dpad {

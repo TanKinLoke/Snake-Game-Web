@@ -260,3 +260,27 @@ test('high contrast and screen shake toggles persist in storage', () => {
   assert.equal(game.screenShake, !initialShake);
   assert.equal(storage.getItem(SnakeGame.SCREEN_SHAKE_KEY), String(!initialShake));
 });
+
+test('language switcher toggles between English and Chinese and persists in storage', () => {
+  const storage = createMemoryStorage();
+  const game = new SnakeGame({ headless: true, storage });
+
+  assert.equal(game.language, 'en');
+  assert.equal(game.getStrings().titleHeading, 'Orchard Snake');
+
+  game.toggleLanguage();
+  assert.equal(game.language, 'zh');
+  assert.equal(storage.getItem(SnakeGame.LANGUAGE_KEY), 'zh');
+  assert.equal(game.getStrings().titleHeading, '果园贪吃蛇');
+  assert.equal(game.getStrings().modes.hard, '困难');
+
+  assert.equal(game.setLanguage('fr'), false);
+  assert.equal(game.language, 'zh');
+
+  const reloaded = new SnakeGame({ headless: true, storage });
+  assert.equal(reloaded.language, 'zh');
+
+  reloaded.toggleLanguage();
+  assert.equal(reloaded.language, 'en');
+  assert.equal(storage.getItem(SnakeGame.LANGUAGE_KEY), 'en');
+});

@@ -10,11 +10,99 @@ export class SnakeGame {
   static BEST_SCORE_KEY = 'snake_best_score';
   static BEST_SCORE_PREFIX = 'snake_best_score_';
   static DIFFICULTY_KEY = 'snake_difficulty';
+  static LANGUAGE_KEY = 'snake_language';
   static HIGH_CONTRAST_KEY = 'snake_high_contrast';
   static SCREEN_SHAKE_KEY = 'snake_screen_shake';
   static PARTICLE_POOL_SIZE = 48;
   static SWIPE_THRESHOLD_PX = 30;
   static MAX_QUEUE_LENGTH = 2;
+
+  static TRANSLATIONS = Object.freeze({
+    en: Object.freeze({
+      htmlLang: 'en',
+      docTitle: 'Orchard Snake',
+      scoreLabel: 'Score',
+      bestHud: 'Best · {mode}',
+      finalScoreLabel: 'Final Score',
+      finalBestLabel: 'Best ({mode})',
+      newBest: 'New Best!',
+      switchLangButton: '中文',
+      switchLangAria: 'Switch to Chinese',
+      switchLangTitle: 'Switch language (EN / 中文)',
+      muteAria: 'Mute sound',
+      unmuteAria: 'Unmute sound',
+      pauseAria: 'Pause game',
+      resumeAria: 'Resume game',
+      modes: Object.freeze({ casual: 'Casual', normal: 'Normal', hard: 'Hard' }),
+      difficultyMeta: '{start}ms start · -{step}ms per apple · {min}ms cap',
+      contrastLabel: 'High Contrast: {state}',
+      shakeLabel: 'Screen Shake: {state}',
+      on: 'On',
+      off: 'Off',
+      titleHeading: 'Orchard Snake',
+      titleSubtitle: 'Collect apples, grab bonus golden apples, and avoid walls.',
+      startCta: 'Start Game',
+      loadingCta: 'Loading Sprites...',
+      titleHints: 'Arrows / WASD Move · Space / P Pause · M Mute',
+      pausedHeading: 'Paused',
+      pausedSubtitle: 'Take a breather. Ready when you are.',
+      resumeCta: 'Resume',
+      restartCta: 'Restart',
+      pausedHints: 'Press Space or P to Resume',
+      gameOverHeading: 'Game Over',
+      winHeading: 'Orchard Mastered!',
+      gameOverSubtitle: 'You crashed! Better luck next run.',
+      winSubtitle: 'You filled every tile on the board!',
+      playAgainCta: 'Play Again',
+      gameOverHints: 'Press Enter or Space to Play Again',
+      dpadUp: 'Move Up',
+      dpadDown: 'Move Down',
+      dpadLeft: 'Move Left',
+      dpadRight: 'Move Right',
+    }),
+    zh: Object.freeze({
+      htmlLang: 'zh-CN',
+      docTitle: '果园贪吃蛇',
+      scoreLabel: '得分',
+      bestHud: '最高 · {mode}',
+      finalScoreLabel: '本局得分',
+      finalBestLabel: '最高 ({mode})',
+      newBest: '新纪录！',
+      switchLangButton: 'EN',
+      switchLangAria: '切换为英文',
+      switchLangTitle: '切换语言 (中文 / EN)',
+      muteAria: '静音',
+      unmuteAria: '取消静音',
+      pauseAria: '暂停游戏',
+      resumeAria: '继续游戏',
+      modes: Object.freeze({ casual: '休闲', normal: '普通', hard: '困难' }),
+      difficultyMeta: '初始 {start}ms · 每果 -{step}ms · 最快 {min}ms',
+      contrastLabel: '高对比度：{state}',
+      shakeLabel: '屏幕震动：{state}',
+      on: '开',
+      off: '关',
+      titleHeading: '果园贪吃蛇',
+      titleSubtitle: '收集红苹果与限时金苹果，小心别撞墙或咬到自己。',
+      startCta: '开始游戏',
+      loadingCta: '正在加载...',
+      titleHints: '方向键 / WASD 移动 · Space / P 暂停 · M 静音',
+      pausedHeading: '已暂停',
+      pausedSubtitle: '稍作休息，随时继续挑战。',
+      resumeCta: '继续游戏',
+      restartCta: '重新开始',
+      pausedHints: '按 Space 或 P 键继续',
+      gameOverHeading: '游戏结束',
+      winHeading: '制霸果园！',
+      gameOverSubtitle: '撞到障碍了，再来一局试试！',
+      winSubtitle: '你已填满整个棋盘！',
+      playAgainCta: '再来一局',
+      gameOverHints: '按 Enter 或 Space 重新开始',
+      dpadUp: '向上移动',
+      dpadDown: '向下移动',
+      dpadLeft: '向左移动',
+      dpadRight: '向右移动',
+    }),
+  });
 
   static DIFFICULTIES = Object.freeze({
     casual: Object.freeze({
@@ -100,6 +188,7 @@ export class SnakeGame {
     this.rng = typeof options.rng === 'function' ? options.rng : Math.random;
 
     this.state = SnakeGame.STATES.TITLE;
+    this.language = this.#resolveLanguage(options.language || this.#loadLanguage());
     this.difficulty = this.#resolveDifficulty(options.difficulty || this.#loadDifficulty());
     this.score = 0;
     this.bestScores = this.#loadAllBestScores();
@@ -174,6 +263,7 @@ export class SnakeGame {
     this.#cacheDom();
     this.#bindEvents();
     this.#applyHighContrastClass();
+    this.#applyDocumentLanguage();
     this.#resizeCanvas();
     this.#syncHud();
     this.#syncOverlay();
@@ -346,6 +436,26 @@ export class SnakeGame {
     this.screenShake = !this.screenShake;
     this.#saveBooleanSetting(SnakeGame.SCREEN_SHAKE_KEY, this.screenShake);
     this.#syncOverlay();
+  }
+
+  getStrings() {
+    return SnakeGame.TRANSLATIONS[this.language] || SnakeGame.TRANSLATIONS.en;
+  }
+
+  setLanguage(lang) {
+    if (!Object.prototype.hasOwnProperty.call(SnakeGame.TRANSLATIONS, lang)) {
+      return false;
+    }
+    this.language = lang;
+    this.#saveLanguage(lang);
+    this.#applyDocumentLanguage();
+    this.#syncHud();
+    this.#syncOverlay();
+    return true;
+  }
+
+  toggleLanguage() {
+    this.setLanguage(this.language === 'zh' ? 'en' : 'zh');
   }
 
   computeTickInterval(applesEaten, mode = this.difficulty) {
@@ -633,9 +743,11 @@ export class SnakeGame {
 
   #cacheDom() {
     this.dom = {
+      scoreLabel: document.getElementById('score-label'),
       scoreValue: document.getElementById('score-value'),
       bestLabel: document.getElementById('best-label'),
       bestValue: document.getElementById('best-value'),
+      langBtn: document.getElementById('lang-btn'),
       muteBtn: document.getElementById('mute-btn'),
       iconSoundOn: document.getElementById('icon-sound-on'),
       iconSoundOff: document.getElementById('icon-sound-off'),
@@ -650,6 +762,7 @@ export class SnakeGame {
       overlayTitle: document.getElementById('overlay-title'),
       overlaySubtitle: document.getElementById('overlay-subtitle'),
       overlayStats: document.getElementById('overlay-stats'),
+      finalScoreLabel: document.getElementById('final-score-label'),
       finalScoreValue: document.getElementById('final-score-value'),
       finalBestLabel: document.getElementById('final-best-label'),
       finalBestValue: document.getElementById('final-best-value'),
@@ -673,6 +786,13 @@ export class SnakeGame {
     window.addEventListener('resize', this.#boundHandlers.resize);
     window.addEventListener('keydown', this.#boundHandlers.keydown);
     document.addEventListener('visibilitychange', this.#boundHandlers.visibilitychange);
+
+    if (this.dom.langBtn) {
+      this.dom.langBtn.addEventListener('click', () => {
+        this.toggleLanguage();
+        this.dom.langBtn.blur();
+      });
+    }
 
     if (this.dom.muteBtn) {
       this.dom.muteBtn.addEventListener('click', () => {
@@ -1101,20 +1221,31 @@ export class SnakeGame {
   #syncHud() {
     if (this.headless) return;
     const cfg = this.getDifficultyConfig();
+    const t = this.getStrings();
+    const modeLabel = t.modes[cfg.id] || cfg.label;
 
+    if (this.dom.scoreLabel) {
+      this.dom.scoreLabel.textContent = t.scoreLabel;
+    }
     if (this.dom.scoreValue) {
       this.dom.scoreValue.textContent = String(this.score);
     }
     if (this.dom.bestLabel) {
-      this.dom.bestLabel.textContent = `Best · ${cfg.label}`;
+      this.dom.bestLabel.textContent = t.bestHud.replace('{mode}', modeLabel);
     }
     if (this.dom.bestValue) {
       this.dom.bestValue.textContent = String(this.bestScore);
     }
 
+    if (this.dom.langBtn) {
+      this.dom.langBtn.textContent = t.switchLangButton;
+      this.dom.langBtn.setAttribute('aria-label', t.switchLangAria);
+      this.dom.langBtn.setAttribute('title', t.switchLangTitle);
+    }
+
     if (this.dom.muteBtn) {
       this.dom.muteBtn.setAttribute('aria-pressed', String(this.muted));
-      this.dom.muteBtn.setAttribute('aria-label', this.muted ? 'Unmute sound' : 'Mute sound');
+      this.dom.muteBtn.setAttribute('aria-label', this.muted ? t.unmuteAria : t.muteAria);
     }
     if (this.dom.iconSoundOn && this.dom.iconSoundOff) {
       this.dom.iconSoundOn.hidden = this.muted;
@@ -1128,12 +1259,27 @@ export class SnakeGame {
       const isPaused = this.state === SnakeGame.STATES.PAUSED;
       this.dom.pauseBtn.disabled = !canPause;
       this.dom.pauseBtn.setAttribute('aria-pressed', String(isPaused));
-      this.dom.pauseBtn.setAttribute('aria-label', isPaused ? 'Resume game' : 'Pause game');
+      this.dom.pauseBtn.setAttribute('aria-label', isPaused ? t.resumeAria : t.pauseAria);
     }
     if (this.dom.iconPause && this.dom.iconPlay) {
       const isPaused = this.state === SnakeGame.STATES.PAUSED;
       this.dom.iconPause.hidden = isPaused;
       this.dom.iconPlay.hidden = !isPaused;
+    }
+
+    if (this.dom.dpadButtons) {
+      const dirLabels = {
+        UP: t.dpadUp,
+        DOWN: t.dpadDown,
+        LEFT: t.dpadLeft,
+        RIGHT: t.dpadRight,
+      };
+      for (const btn of this.dom.dpadButtons) {
+        const label = dirLabels[btn.dataset.dir];
+        if (label) {
+          btn.setAttribute('aria-label', label);
+        }
+      }
     }
   }
 
@@ -1147,6 +1293,15 @@ export class SnakeGame {
     this.#syncDifficultyUi();
     this.#syncVisualOptionsUi();
     const cfg = this.getDifficultyConfig();
+    const t = this.getStrings();
+    const modeLabel = t.modes[cfg.id] || cfg.label;
+
+    if (this.dom.newBestBadge) {
+      this.dom.newBestBadge.textContent = t.newBest;
+    }
+    if (this.dom.finalScoreLabel) {
+      this.dom.finalScoreLabel.textContent = t.finalScoreLabel;
+    }
 
     if (this.state === SnakeGame.STATES.TITLE) {
       this.dom.overlayEmblem.hidden = false;
@@ -1155,15 +1310,11 @@ export class SnakeGame {
       if (this.dom.difficultyPicker) this.dom.difficultyPicker.hidden = false;
       if (this.dom.visualOptions) this.dom.visualOptions.hidden = false;
       this.dom.secondaryCta.hidden = true;
-      this.dom.overlayTitle.textContent = 'Orchard Snake';
-      this.dom.overlaySubtitle.textContent =
-        'Collect apples, grab bonus golden apples, and avoid walls.';
-      this.dom.primaryCta.textContent = this.spritesLoaded
-        ? 'Start Game'
-        : 'Loading Sprites...';
+      this.dom.overlayTitle.textContent = t.titleHeading;
+      this.dom.overlaySubtitle.textContent = t.titleSubtitle;
+      this.dom.primaryCta.textContent = this.spritesLoaded ? t.startCta : t.loadingCta;
       this.dom.primaryCta.disabled = !this.spritesLoaded;
-      this.dom.controlHints.textContent =
-        'Arrows / WASD Move · Space / P Pause · M Mute';
+      this.dom.controlHints.textContent = t.titleHints;
     } else if (this.state === SnakeGame.STATES.PAUSED) {
       this.dom.overlayEmblem.hidden = true;
       this.dom.newBestBadge.hidden = true;
@@ -1172,18 +1323,16 @@ export class SnakeGame {
       if (this.dom.visualOptions) this.dom.visualOptions.hidden = false;
       this.dom.finalScoreValue.textContent = String(this.score);
       if (this.dom.finalBestLabel) {
-        this.dom.finalBestLabel.textContent = `Best (${cfg.label})`;
+        this.dom.finalBestLabel.textContent = t.finalBestLabel.replace('{mode}', modeLabel);
       }
       this.dom.finalBestValue.textContent = String(this.bestScore);
       this.dom.secondaryCta.hidden = false;
-      this.dom.secondaryCta.textContent = 'Restart';
-      this.dom.overlayTitle.textContent = 'Paused';
-      this.dom.overlaySubtitle.textContent =
-        'Take a breather. Ready when you are.';
-      this.dom.primaryCta.textContent = 'Resume';
+      this.dom.secondaryCta.textContent = t.restartCta;
+      this.dom.overlayTitle.textContent = t.pausedHeading;
+      this.dom.overlaySubtitle.textContent = t.pausedSubtitle;
+      this.dom.primaryCta.textContent = t.resumeCta;
       this.dom.primaryCta.disabled = false;
-      this.dom.controlHints.textContent =
-        'Press Space or P to Resume';
+      this.dom.controlHints.textContent = t.pausedHints;
     } else if (this.state === SnakeGame.STATES.GAME_OVER) {
       this.dom.overlayEmblem.hidden = true;
       this.dom.newBestBadge.hidden = !(this.isNewBest && this.score > 0);
@@ -1192,51 +1341,71 @@ export class SnakeGame {
       if (this.dom.visualOptions) this.dom.visualOptions.hidden = true;
       this.dom.finalScoreValue.textContent = String(this.score);
       if (this.dom.finalBestLabel) {
-        this.dom.finalBestLabel.textContent = `Best (${cfg.label})`;
+        this.dom.finalBestLabel.textContent = t.finalBestLabel.replace('{mode}', modeLabel);
       }
       this.dom.finalBestValue.textContent = String(this.bestScore);
       this.dom.secondaryCta.hidden = true;
-      this.dom.overlayTitle.textContent = this.isWin ? 'Orchard Mastered!' : 'Game Over';
-      this.dom.overlaySubtitle.textContent = this.isWin
-        ? 'You filled every tile on the board!'
-        : 'You crashed! Better luck next run.';
-      this.dom.primaryCta.textContent = 'Play Again';
+      this.dom.overlayTitle.textContent = this.isWin ? t.winHeading : t.gameOverHeading;
+      this.dom.overlaySubtitle.textContent = this.isWin ? t.winSubtitle : t.gameOverSubtitle;
+      this.dom.primaryCta.textContent = t.playAgainCta;
       this.dom.primaryCta.disabled = false;
-      this.dom.controlHints.textContent =
-        'Press Enter or Space to Play Again';
+      this.dom.controlHints.textContent = t.gameOverHints;
     }
   }
 
   #syncDifficultyUi() {
     if (this.headless) return;
     const cfg = this.getDifficultyConfig();
+    const t = this.getStrings();
     if (this.dom.difficultyButtons) {
       for (const btn of this.dom.difficultyButtons) {
-        const isSelected = btn.dataset.difficulty === cfg.id;
+        const modeId = btn.dataset.difficulty;
+        const isSelected = modeId === cfg.id;
         btn.setAttribute('aria-pressed', String(isSelected));
+        if (modeId && t.modes[modeId]) {
+          btn.textContent = t.modes[modeId];
+        }
       }
     }
     if (this.dom.difficultyMeta) {
-      this.dom.difficultyMeta.textContent =
-        `${cfg.initialTickMs}ms start · -${cfg.speedStepMs}ms per apple · ${cfg.minTickMs}ms cap`;
+      this.dom.difficultyMeta.textContent = t.difficultyMeta
+        .replace('{start}', String(cfg.initialTickMs))
+        .replace('{step}', String(cfg.speedStepMs))
+        .replace('{min}', String(cfg.minTickMs));
     }
   }
 
   #syncVisualOptionsUi() {
     if (this.headless) return;
+    const t = this.getStrings();
     if (this.dom.contrastToggle) {
       this.dom.contrastToggle.setAttribute('aria-pressed', String(this.highContrast));
-      this.dom.contrastToggle.textContent = `High Contrast: ${this.highContrast ? 'On' : 'Off'}`;
+      this.dom.contrastToggle.textContent = t.contrastLabel.replace(
+        '{state}',
+        this.highContrast ? t.on : t.off
+      );
     }
     if (this.dom.shakeToggle) {
       this.dom.shakeToggle.setAttribute('aria-pressed', String(this.screenShake));
-      this.dom.shakeToggle.textContent = `Screen Shake: ${this.screenShake ? 'On' : 'Off'}`;
+      this.dom.shakeToggle.textContent = t.shakeLabel.replace(
+        '{state}',
+        this.screenShake ? t.on : t.off
+      );
     }
   }
 
   #applyHighContrastClass() {
     if (this.headless || typeof document === 'undefined' || !document.body) return;
     document.body.classList.toggle('high-contrast', this.highContrast);
+  }
+
+  #applyDocumentLanguage() {
+    if (this.headless || typeof document === 'undefined') return;
+    const t = this.getStrings();
+    if (document.documentElement) {
+      document.documentElement.lang = t.htmlLang;
+    }
+    document.title = t.docTitle;
   }
 
   #blurActiveElement() {
@@ -1335,6 +1504,28 @@ export class SnakeGame {
     try {
       if (!this.storage) return;
       this.storage.setItem(SnakeGame.DIFFICULTY_KEY, mode);
+    } catch {
+      // Ignore storage errors in private browsing mode
+    }
+  }
+
+  #resolveLanguage(lang) {
+    return Object.prototype.hasOwnProperty.call(SnakeGame.TRANSLATIONS, lang) ? lang : 'en';
+  }
+
+  #loadLanguage() {
+    try {
+      if (!this.storage) return 'en';
+      return this.#resolveLanguage(this.storage.getItem(SnakeGame.LANGUAGE_KEY));
+    } catch {
+      return 'en';
+    }
+  }
+
+  #saveLanguage(lang) {
+    try {
+      if (!this.storage) return;
+      this.storage.setItem(SnakeGame.LANGUAGE_KEY, lang);
     } catch {
       // Ignore storage errors in private browsing mode
     }

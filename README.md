@@ -9,6 +9,7 @@ A responsive, zero-dependency HTML5 Canvas Snake arcade game built with vanilla 
 - **Difficulty Modes & Per-Difficulty Best Scores**: Choose between **Casual** (`175ms` start, `-1ms`/apple, `95ms` cap), **Normal** (`140ms` start, `-2ms`/apple, `75ms` cap), and **Hard** (`105ms` start, `-3ms`/apple, `55ms` cap). Best scores are tracked independently per mode in `localStorage` (`snake_best_score_casual`, `snake_best_score_normal`, `snake_best_score_hard`) and displayed live in the HUD (`Best · <Mode>`).
 - **Bonus Golden Apples**: Every 4th regular apple eaten spawns a timed Golden Apple (`+25` points, `6.5s` duration with a circular countdown ring on the canvas, golden chime arpeggio, and +1 segment growth).
 - **Visual Juice & Accessibility Options**: Pooled zero-GC particle bursts on pickups and crashes, toggleable crash screen shake (respecting `prefers-reduced-motion`), and a toggleable **High Contrast** color-blind-safe palette (`#38bdf8` snake with `#ffffff` crisp outlines).
+- **Bilingual UI (English / 中文)**: Instant HUD language toggle switching all labels, overlays, difficulty names, accessibility options, and controls between English and Simplified Chinese, persisted in `localStorage`.
 - **Responsive Controls & Synthesized Audio**: 2-turn directional queue, Arrow keys / `WASD`, `P` / `Space` / `Escape` to pause, `M` to mute, swipe gestures (`30px` threshold), mobile on-screen D-Pad (`pointerdown`), and Web Audio API retro sound effects.
 
 ## Controls
