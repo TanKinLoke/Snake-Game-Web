@@ -46,3 +46,11 @@ Build for production:
 ```bash
 npm run build
 ```
+
+## Deploying to GitHub Pages
+
+This project is 100% client-side with relative asset paths (`./`) and works on GitHub Pages in two ways:
+
+1. **GitHub Actions (Recommended)**: Push to `main` and in repository **Settings → Pages**, set **Source** to **GitHub Actions**. The included workflow builds `dist/` with relative `./assets/` paths so it works on both `username.github.io` and `username.github.io/repo-name/`.
+2. **Deploy from Branch (`/(root)`)**: Because `index.html`, `style.css`, and `game.js` use pure vanilla ES modules and relative paths with zero build requirement, you can also set **Settings → Pages → Source** to **Deploy from a branch** (`main`, `/ (root)`).
+
