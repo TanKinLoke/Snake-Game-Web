@@ -4,9 +4,42 @@ export class SnakeGame {
   static MIN_TICK_MS = 75;
   static SPEED_STEP_MS = 2;
   static POINTS_PER_APPLE = 10;
+  static GOLDEN_APPLE_POINTS = 25;
+  static GOLDEN_APPLE_EVERY = 4;
+  static GOLDEN_APPLE_DURATION_MS = 6500;
   static BEST_SCORE_KEY = 'snake_best_score';
+  static BEST_SCORE_PREFIX = 'snake_best_score_';
+  static DIFFICULTY_KEY = 'snake_difficulty';
+  static PLAYER_NAME_KEY = 'snake_player_name';
+  static HIGH_CONTRAST_KEY = 'snake_high_contrast';
+  static SCREEN_SHAKE_KEY = 'snake_screen_shake';
+  static PARTICLE_POOL_SIZE = 48;
   static SWIPE_THRESHOLD_PX = 30;
   static MAX_QUEUE_LENGTH = 2;
+
+  static DIFFICULTIES = Object.freeze({
+    casual: Object.freeze({
+      id: 'casual',
+      label: 'Casual',
+      initialTickMs: 175,
+      speedStepMs: 1,
+      minTickMs: 95,
+    }),
+    normal: Object.freeze({
+      id: 'normal',
+      label: 'Normal',
+      initialTickMs: 140,
+      speedStepMs: 2,
+      minTickMs: 75,
+    }),
+    hard: Object.freeze({
+      id: 'hard',
+      label: 'Hard',
+      initialTickMs: 105,
+      speedStepMs: 3,
+      minTickMs: 55,
+    }),
+  });
 
   static STATES = Object.freeze({
     TITLE: 'title',
@@ -29,6 +62,13 @@ export class SnakeGame {
     <ellipse cx="22.5" cy="27.5" rx="3.5" ry="6.8" transform="rotate(-18 22.5 27.5)" fill="#fecaca" opacity="0.72"/>
   </svg>`;
 
+  static GOLDEN_APPLE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+    <path d="M32 16c-5-4.8-13.2-4.2-17.6 1.2-4.8 5.8-4.8 17-.4 26 3.3 6.8 8.3 12 13.4 12 2.2 0 3.6-.8 4.6-.8s2.4.8 4.6.8c5.1 0 10.1-5.2 13.4-12 4.4-9 4.4-20.2-.4-26C45.2 11.8 37 11.2 32 16z" fill="#facc15" stroke="#854d0e" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M32 15.5c0-5.4 2.8-9.2 6.6-10.6" fill="none" stroke="#a16207" stroke-width="3.8" stroke-linecap="round"/>
+    <path d="M33 13.5c4.6-4.8 11.4-5.4 14.2-1.2-3 4-9 5.2-14.2 1.2z" fill="#86efac" stroke="#14532d" stroke-width="2" stroke-linejoin="round"/>
+    <ellipse cx="22.5" cy="27.5" rx="3.5" ry="6.8" transform="rotate(-18 22.5 27.5)" fill="#fef9c3" opacity="0.88"/>
+  </svg>`;
+
   static SNAKE_HEAD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
     <path d="M51 32h10l3-3.5M61 32l3 3.5" fill="none" stroke="#f43f5e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
     <rect x="6" y="8" width="48" height="48" rx="18" fill="#22c55e" stroke="#052e16" stroke-width="3"/>
@@ -43,32 +83,75 @@ export class SnakeGame {
     <circle cx="48" cy="37" r="1.4" fill="#052e16"/>
   </svg>`;
 
+  static SNAKE_HEAD_HC_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+    <path d="M51 32h10l3-3.5M61 32l3 3.5" fill="none" stroke="#fb923c" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="6" y="8" width="48" height="48" rx="18" fill="#38bdf8" stroke="#ffffff" stroke-width="3.2"/>
+    <rect x="12" y="13" width="32" height="10" rx="5" fill="#e0f2fe" opacity="0.4"/>
+    <circle cx="38" cy="20" r="6.5" fill="#ffffff" stroke="#020617" stroke-width="2.2"/>
+    <circle cx="38" cy="44" r="6.5" fill="#ffffff" stroke="#020617" stroke-width="2.2"/>
+    <circle cx="40" cy="20" r="3.2" fill="#020617"/>
+    <circle cx="40" cy="44" r="3.2" fill="#020617"/>
+    <circle cx="39" cy="18.8" r="1.1" fill="#ffffff"/>
+    <circle cx="39" cy="42.8" r="1.1" fill="#ffffff"/>
+  </svg>`;
+
   constructor(options = {}) {
     this.headless = Boolean(options.headless);
     this.storage = options.storage !== undefined ? options.storage : this.#getSafeStorage();
     this.rng = typeof options.rng === 'function' ? options.rng : Math.random;
 
     this.state = SnakeGame.STATES.TITLE;
+    this.difficulty = this.#resolveDifficulty(options.difficulty || this.#loadDifficulty());
     this.score = 0;
-    this.bestScore = this.#loadBestScore();
+    this.bestScores = this.#loadAllBestScores();
+    this.bestScore = this.bestScores[this.difficulty] || 0;
     this.runStartBestScore = this.bestScore;
     this.isNewBest = false;
     this.isWin = false;
     this.muted = false;
+    this.highContrast = this.#loadBooleanSetting(SnakeGame.HIGH_CONTRAST_KEY, false);
+    this.screenShake = this.#loadBooleanSetting(
+      SnakeGame.SCREEN_SHAKE_KEY,
+      !this.#prefersReducedMotion()
+    );
     this.spritesLoaded = false;
 
     this.snake = [];
     this.direction = SnakeGame.DIRECTIONS.RIGHT;
     this.inputQueue = [];
     this.apple = { x: 14, y: 10 };
+    this.goldenApple = null;
     this.applesEaten = 0;
-    this.tickIntervalMs = SnakeGame.INITIAL_TICK_MS;
+    this.tickIntervalMs = this.computeTickInterval(0);
     this.accumulatorMs = 0;
     this.lastFrameTime = 0;
     this.rafId = null;
+    this.fxRafId = null;
+
+    this.particles = Array.from({ length: SnakeGame.PARTICLE_POOL_SIZE }, () => ({
+      active: false,
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      lifeMs: 0,
+      maxLifeMs: 1,
+      size: 3,
+      color: '#ffffff',
+    }));
+    this.particleCursor = 0;
+    this.shakeTrauma = 0;
+
+    this.leaderboardOpen = false;
+    this.leaderboardFilter = 'all';
+    this.scoreSubmitted = false;
+    this.submittingScore = false;
+    this.submitMessage = '';
+    this.submitIsError = false;
+    this.stateBeforeLeaderboard = null;
 
     this.audioCtx = null;
-    this.sprites = { apple: null, head: null };
+    this.sprites = { apple: null, goldenApple: null, head: null, headHc: null };
     this.touchStart = null;
     this.canvasSize = 400;
     this.dpr = 1;
@@ -99,6 +182,7 @@ export class SnakeGame {
 
     this.#cacheDom();
     this.#bindEvents();
+    this.#applyHighContrastClass();
     this.#resizeCanvas();
     this.#syncHud();
     this.#syncOverlay();
@@ -148,10 +232,20 @@ export class SnakeGame {
     this.inputQueue = [];
     this.score = 0;
     this.applesEaten = 0;
-    this.tickIntervalMs = SnakeGame.INITIAL_TICK_MS;
+    this.bestScore = this.bestScores[this.difficulty] || 0;
+    this.tickIntervalMs = this.computeTickInterval(0);
     this.accumulatorMs = 0;
     this.isNewBest = false;
     this.isWin = false;
+    this.goldenApple = null;
+    this.shakeTrauma = 0;
+    this.scoreSubmitted = false;
+    this.submittingScore = false;
+    this.submitMessage = '';
+    this.submitIsError = false;
+    for (const p of this.particles) {
+      p.active = false;
+    }
     this.apple = this.spawnApple();
   }
 
@@ -162,6 +256,11 @@ export class SnakeGame {
     if (fromUserGesture) {
       this.#unlockAudio();
     }
+    this.leaderboardOpen = false;
+    if (this.dom.leaderboardModal) {
+      this.dom.leaderboardModal.hidden = true;
+    }
+    this.bestScore = this.bestScores[this.difficulty] || 0;
     this.runStartBestScore = this.bestScore;
     this.resetBoardState();
     this.state = SnakeGame.STATES.PLAYING;
@@ -235,15 +334,50 @@ export class SnakeGame {
     return true;
   }
 
-  computeTickInterval(applesEaten) {
+  getDifficultyConfig(mode = this.difficulty) {
+    return SnakeGame.DIFFICULTIES[mode] || SnakeGame.DIFFICULTIES.normal;
+  }
+
+  setDifficulty(mode) {
+    if (!Object.prototype.hasOwnProperty.call(SnakeGame.DIFFICULTIES, mode)) {
+      return false;
+    }
+    this.difficulty = mode;
+    this.#saveDifficulty(mode);
+    this.bestScore = this.bestScores[mode] || 0;
+    this.tickIntervalMs = this.computeTickInterval(this.applesEaten);
+    this.#syncHud();
+    this.#syncOverlay();
+    return true;
+  }
+
+  toggleHighContrast() {
+    this.highContrast = !this.highContrast;
+    this.#saveBooleanSetting(SnakeGame.HIGH_CONTRAST_KEY, this.highContrast);
+    this.#applyHighContrastClass();
+    this.#syncOverlay();
+    this.#render(performance.now());
+  }
+
+  toggleScreenShake() {
+    this.screenShake = !this.screenShake;
+    this.#saveBooleanSetting(SnakeGame.SCREEN_SHAKE_KEY, this.screenShake);
+    this.#syncOverlay();
+  }
+
+  computeTickInterval(applesEaten, mode = this.difficulty) {
+    const cfg = this.getDifficultyConfig(mode);
     return Math.max(
-      SnakeGame.MIN_TICK_MS,
-      SnakeGame.INITIAL_TICK_MS - applesEaten * SnakeGame.SPEED_STEP_MS
+      cfg.minTickMs,
+      cfg.initialTickMs - applesEaten * cfg.speedStepMs
     );
   }
 
-  spawnApple() {
+  spawnApple(excludeCell = this.goldenApple) {
     const occupied = new Set(this.snake.map((seg) => `${seg.x},${seg.y}`));
+    if (excludeCell) {
+      occupied.add(`${excludeCell.x},${excludeCell.y}`);
+    }
     const freeCells = [];
     for (let y = 0; y < SnakeGame.GRID_SIZE; y += 1) {
       for (let x = 0; x < SnakeGame.GRID_SIZE; x += 1) {
@@ -259,6 +393,37 @@ export class SnakeGame {
 
     const index = Math.floor(this.rng() * freeCells.length);
     return freeCells[Math.min(index, freeCells.length - 1)];
+  }
+
+  spawnGoldenApple() {
+    const cell = this.spawnApple(this.apple);
+    if (!cell) return null;
+    return {
+      x: cell.x,
+      y: cell.y,
+      remainingMs: SnakeGame.GOLDEN_APPLE_DURATION_MS,
+      durationMs: SnakeGame.GOLDEN_APPLE_DURATION_MS,
+    };
+  }
+
+  emitParticles(gridX, gridY, color, count = 10) {
+    if (this.headless) return;
+    for (let i = 0; i < count; i += 1) {
+      const slot = this.particles[this.particleCursor];
+      this.particleCursor = (this.particleCursor + 1) % this.particles.length;
+
+      const angle = (Math.PI * 2 * i) / count + (this.rng() - 0.5) * 0.5;
+      const speed = 1.6 + this.rng() * 3.0;
+      slot.active = true;
+      slot.x = gridX + 0.5;
+      slot.y = gridY + 0.5;
+      slot.vx = Math.cos(angle) * speed;
+      slot.vy = Math.sin(angle) * speed;
+      slot.maxLifeMs = 280 + this.rng() * 180;
+      slot.lifeMs = slot.maxLifeMs;
+      slot.size = 2.6 + this.rng() * 2.2;
+      slot.color = color;
+    }
   }
 
   step() {
@@ -282,18 +447,27 @@ export class SnakeGame {
       nextHead.y < 0 ||
       nextHead.y >= SnakeGame.GRID_SIZE
     ) {
+      this.emitParticles(head.x, head.y, '#fca5a5', 16);
       this.#finishGame(false);
       return false;
     }
 
-    const willEat =
+    const ateRegular =
       this.apple !== null &&
       nextHead.x === this.apple.x &&
       nextHead.y === this.apple.y;
 
+    const ateGolden =
+      this.goldenApple !== null &&
+      nextHead.x === this.goldenApple.x &&
+      nextHead.y === this.goldenApple.y;
+
+    const willEat = ateRegular || ateGolden;
+
     const collisionLimit = willEat ? this.snake.length : this.snake.length - 1;
     for (let i = 0; i < collisionLimit; i += 1) {
       if (this.snake[i].x === nextHead.x && this.snake[i].y === nextHead.y) {
+        this.emitParticles(head.x, head.y, '#fca5a5', 16);
         this.#finishGame(false);
         return false;
       }
@@ -302,13 +476,29 @@ export class SnakeGame {
     this.snake.unshift(nextHead);
 
     if (willEat) {
-      this.score += SnakeGame.POINTS_PER_APPLE;
-      this.applesEaten += 1;
-      this.tickIntervalMs = this.computeTickInterval(this.applesEaten);
+      if (ateRegular) {
+        this.score += SnakeGame.POINTS_PER_APPLE;
+        this.applesEaten += 1;
+        this.tickIntervalMs = this.computeTickInterval(this.applesEaten);
+        this.emitParticles(
+          nextHead.x,
+          nextHead.y,
+          this.highContrast ? '#fb923c' : '#ef4444',
+          10
+        );
+      }
 
-      if (this.score > this.bestScore) {
+      if (ateGolden) {
+        this.score += SnakeGame.GOLDEN_APPLE_POINTS;
+        this.goldenApple = null;
+        this.emitParticles(nextHead.x, nextHead.y, '#fde047', 16);
+      }
+
+      const currentBest = this.bestScores[this.difficulty] || 0;
+      if (this.score > currentBest) {
+        this.bestScores[this.difficulty] = this.score;
         this.bestScore = this.score;
-        this.#saveBestScore(this.bestScore);
+        this.#saveBestScoreForDifficulty(this.difficulty, this.score);
       }
       if (this.score > this.runStartBestScore) {
         this.isNewBest = true;
@@ -316,13 +506,23 @@ export class SnakeGame {
 
       if (this.snake.length >= SnakeGame.GRID_SIZE * SnakeGame.GRID_SIZE) {
         this.apple = null;
+        this.goldenApple = null;
         this.#playTone('win');
         this.#finishGame(true);
         return true;
       }
 
-      this.apple = this.spawnApple();
-      this.#playTone('eat');
+      if (ateRegular) {
+        this.apple = this.spawnApple(this.goldenApple);
+        if (
+          this.applesEaten % SnakeGame.GOLDEN_APPLE_EVERY === 0 &&
+          !this.goldenApple
+        ) {
+          this.goldenApple = this.spawnGoldenApple();
+        }
+      }
+
+      this.#playTone(ateGolden ? 'golden' : 'eat');
       this.#syncHud();
     } else {
       this.snake.pop();
@@ -337,6 +537,10 @@ export class SnakeGame {
     this.#stopLoop();
     if (!isWin) {
       this.#playTone('crash');
+      if (this.screenShake && !this.headless) {
+        this.shakeTrauma = 1;
+      }
+      this.#startPostFxLoop();
     }
     this.#syncBodyState();
     this.#syncHud();
@@ -358,6 +562,57 @@ export class SnakeGame {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;
     }
+    if (this.fxRafId !== null && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(this.fxRafId);
+      this.fxRafId = null;
+    }
+  }
+
+  #startPostFxLoop() {
+    if (this.headless || typeof requestAnimationFrame !== 'function') return;
+    let last = performance.now();
+    const tickFx = (now) => {
+      if (this.state === SnakeGame.STATES.PLAYING) {
+        this.fxRafId = null;
+        return;
+      }
+      const dt = Math.min(Math.max(now - last, 0), 50);
+      last = now;
+      const stillActive = this.#updateVisualEffects(dt);
+      this.#render(now);
+      if (stillActive) {
+        this.fxRafId = requestAnimationFrame(tickFx);
+      } else {
+        this.fxRafId = null;
+      }
+    };
+    this.fxRafId = requestAnimationFrame(tickFx);
+  }
+
+  #updateVisualEffects(dtMs) {
+    let anyActive = false;
+    const dtSec = dtMs / 1000;
+
+    if (this.shakeTrauma > 0) {
+      this.shakeTrauma = Math.max(0, this.shakeTrauma - dtMs / 240);
+      if (this.shakeTrauma > 0) anyActive = true;
+    }
+
+    for (const p of this.particles) {
+      if (!p.active) continue;
+      p.lifeMs -= dtMs;
+      if (p.lifeMs <= 0) {
+        p.active = false;
+        continue;
+      }
+      p.x += p.vx * dtSec;
+      p.y += p.vy * dtSec;
+      p.vx *= 0.94;
+      p.vy *= 0.94;
+      anyActive = true;
+    }
+
+    return anyActive;
   }
 
   #loop(now) {
@@ -370,6 +625,15 @@ export class SnakeGame {
     this.lastFrameTime = now;
     const clampedDelta = Math.min(Math.max(rawDelta, 0), 100);
     this.accumulatorMs += clampedDelta;
+
+    if (this.goldenApple) {
+      this.goldenApple.remainingMs -= clampedDelta;
+      if (this.goldenApple.remainingMs <= 0) {
+        this.goldenApple = null;
+      }
+    }
+
+    this.#updateVisualEffects(clampedDelta);
 
     while (this.accumulatorMs >= this.tickIntervalMs) {
       this.accumulatorMs -= this.tickIntervalMs;
@@ -387,7 +651,9 @@ export class SnakeGame {
   #cacheDom() {
     this.dom = {
       scoreValue: document.getElementById('score-value'),
+      bestLabel: document.getElementById('best-label'),
       bestValue: document.getElementById('best-value'),
+      leaderboardBtn: document.getElementById('leaderboard-btn'),
       muteBtn: document.getElementById('mute-btn'),
       iconSoundOn: document.getElementById('icon-sound-on'),
       iconSoundOff: document.getElementById('icon-sound-off'),
@@ -403,14 +669,34 @@ export class SnakeGame {
       overlaySubtitle: document.getElementById('overlay-subtitle'),
       overlayStats: document.getElementById('overlay-stats'),
       finalScoreValue: document.getElementById('final-score-value'),
+      finalBestLabel: document.getElementById('final-best-label'),
       finalBestValue: document.getElementById('final-best-value'),
+      leaderboardForm: document.getElementById('leaderboard-form'),
+      playerNameInput: document.getElementById('player-name-input'),
+      submitScoreBtn: document.getElementById('submit-score-btn'),
+      submitFeedback: document.getElementById('submit-feedback'),
       primaryCta: document.getElementById('primary-cta'),
       secondaryCta: document.getElementById('secondary-cta'),
+      difficultyPicker: document.getElementById('difficulty-picker'),
+      difficultyMeta: document.getElementById('difficulty-meta'),
+      difficultyButtons: Array.from(document.querySelectorAll('.difficulty-btn')),
+      visualOptions: document.getElementById('visual-options'),
+      contrastToggle: document.getElementById('contrast-toggle'),
+      shakeToggle: document.getElementById('shake-toggle'),
       controlHints: document.getElementById('control-hints'),
+      leaderboardModal: document.getElementById('leaderboard-modal'),
+      closeLeaderboardBtn: document.getElementById('close-leaderboard-btn'),
+      filterButtons: Array.from(document.querySelectorAll('.filter-btn')),
+      leaderboardStatus: document.getElementById('leaderboard-status'),
+      leaderboardTable: document.getElementById('leaderboard-table'),
+      leaderboardTbody: document.getElementById('leaderboard-tbody'),
       dpadButtons: Array.from(document.querySelectorAll('.dpad-btn')),
     };
     if (this.dom.canvas) {
       this.ctx = this.dom.canvas.getContext('2d');
+    }
+    if (this.dom.playerNameInput) {
+      this.dom.playerNameInput.value = this.#loadPlayerName();
     }
   }
 
@@ -449,6 +735,60 @@ export class SnakeGame {
       });
     }
 
+    if (this.dom.leaderboardBtn) {
+      this.dom.leaderboardBtn.addEventListener('click', () => {
+        this.#unlockAudio();
+        if (this.leaderboardOpen) {
+          this.closeLeaderboard();
+        } else {
+          this.openLeaderboard();
+        }
+        this.dom.leaderboardBtn.blur();
+      });
+    }
+
+    if (this.dom.closeLeaderboardBtn) {
+      this.dom.closeLeaderboardBtn.addEventListener('click', () => {
+        this.closeLeaderboard();
+      });
+    }
+
+    for (const btn of this.dom.filterButtons) {
+      btn.addEventListener('click', () => {
+        this.setLeaderboardFilter(btn.dataset.filter || 'all');
+      });
+    }
+
+    if (this.dom.leaderboardForm) {
+      this.dom.leaderboardForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const name = this.dom.playerNameInput ? this.dom.playerNameInput.value : '';
+        this.submitScoreToServer(name);
+      });
+    }
+
+    if (this.dom.contrastToggle) {
+      this.dom.contrastToggle.addEventListener('click', () => {
+        this.toggleHighContrast();
+        this.dom.contrastToggle.blur();
+      });
+    }
+
+    if (this.dom.shakeToggle) {
+      this.dom.shakeToggle.addEventListener('click', () => {
+        this.toggleScreenShake();
+        this.dom.shakeToggle.blur();
+      });
+    }
+
+    for (const btn of this.dom.difficultyButtons) {
+      btn.addEventListener('click', () => {
+        this.#unlockAudio();
+        this.setDifficulty(btn.dataset.difficulty);
+        btn.blur();
+      });
+    }
+
     if (this.dom.canvas) {
       this.dom.canvas.addEventListener('touchstart', this.#boundHandlers.touchstart, { passive: false });
       this.dom.canvas.addEventListener('touchend', this.#boundHandlers.touchend, { passive: false });
@@ -478,9 +818,33 @@ export class SnakeGame {
   #handleKeyDown(e) {
     const key = e.key;
     const lower = key.toLowerCase();
+    const isTextInput =
+      e.target instanceof HTMLInputElement ||
+      e.target instanceof HTMLTextAreaElement;
+
+    if (this.leaderboardOpen) {
+      if (key === 'Escape') {
+        e.preventDefault();
+        this.closeLeaderboard();
+      }
+      return;
+    }
+
+    if (isTextInput) {
+      if (key === 'Escape') {
+        e.target.blur();
+      }
+      return;
+    }
 
     if (key === 'ArrowUp' || key === 'ArrowDown' || key === 'ArrowLeft' || key === 'ArrowRight' || key === ' ') {
       e.preventDefault();
+    }
+
+    if (lower === 'l') {
+      this.#unlockAudio();
+      this.openLeaderboard();
+      return;
     }
 
     if (lower === 'm') {
@@ -594,10 +958,14 @@ export class SnakeGame {
 
     return Promise.all([
       loadImage(SnakeGame.APPLE_SVG),
+      loadImage(SnakeGame.GOLDEN_APPLE_SVG),
       loadImage(SnakeGame.SNAKE_HEAD_SVG),
-    ]).then(([appleImg, headImg]) => {
+      loadImage(SnakeGame.SNAKE_HEAD_HC_SVG),
+    ]).then(([appleImg, goldenAppleImg, headImg, headHcImg]) => {
       this.sprites.apple = appleImg;
+      this.sprites.goldenApple = goldenAppleImg;
       this.sprites.head = headImg;
+      this.sprites.headHc = headHcImg;
     });
   }
 
@@ -606,19 +974,33 @@ export class SnakeGame {
     const ctx = this.ctx;
     const size = this.canvasSize;
     const cell = size / SnakeGame.GRID_SIZE;
+    const hc = this.highContrast;
+
+    let shakeX = 0;
+    let shakeY = 0;
+    if (this.shakeTrauma > 0 && this.screenShake) {
+      const mag = this.shakeTrauma * this.shakeTrauma * 6;
+      shakeX = Math.sin(now * 0.08) * mag;
+      shakeY = Math.cos(now * 0.11) * mag;
+    }
 
     ctx.save();
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.fillStyle = hc ? '#090f1d' : '#15271e';
+    ctx.fillRect(0, 0, size, size);
+    ctx.translate(shakeX, shakeY);
 
     // 1. Two-tone checkerboard grid
+    const tileEven = hc ? '#0f172a' : '#1b3126';
+    const tileOdd = hc ? '#17253d' : '#223b2f';
     for (let y = 0; y < SnakeGame.GRID_SIZE; y += 1) {
       for (let x = 0; x < SnakeGame.GRID_SIZE; x += 1) {
-        ctx.fillStyle = (x + y) % 2 === 0 ? '#1b3126' : '#223b2f';
+        ctx.fillStyle = (x + y) % 2 === 0 ? tileEven : tileOdd;
         ctx.fillRect(x * cell, y * cell, cell, cell);
       }
     }
 
-    // 2. Apple sprite
+    // 2. Regular Apple sprite
     if (this.apple) {
       const cx = (this.apple.x + 0.5) * cell;
       const cy = (this.apple.y + 0.5) * cell;
@@ -627,6 +1009,14 @@ export class SnakeGame {
           ? 0.94 + 0.06 * Math.sin(now * 0.006)
           : 0.96;
       const drawSize = cell * pulse;
+
+      if (hc) {
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, cell * 0.44, 0, Math.PI * 2);
+        ctx.stroke();
+      }
 
       if (this.sprites.apple) {
         ctx.drawImage(
@@ -637,9 +1027,51 @@ export class SnakeGame {
           drawSize
         );
       } else {
-        ctx.fillStyle = '#ef4444';
+        ctx.fillStyle = hc ? '#fb923c' : '#ef4444';
         ctx.beginPath();
         ctx.arc(cx, cy, drawSize * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // 2b. Timed Bonus Golden Apple with countdown ring
+    if (this.goldenApple) {
+      const gx = (this.goldenApple.x + 0.5) * cell;
+      const gy = (this.goldenApple.y + 0.5) * cell;
+      const ratio = Math.max(0, this.goldenApple.remainingMs / this.goldenApple.durationMs);
+      const pulse = 0.9 + 0.08 * Math.sin(now * 0.012);
+      const drawSize = cell * pulse;
+
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.25)';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(gx, gy, cell * 0.46, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(
+        gx,
+        gy,
+        cell * 0.46,
+        -Math.PI / 2,
+        -Math.PI / 2 + Math.PI * 2 * ratio
+      );
+      ctx.stroke();
+
+      if (this.sprites.goldenApple) {
+        ctx.drawImage(
+          this.sprites.goldenApple,
+          gx - drawSize / 2,
+          gy - drawSize / 2,
+          drawSize,
+          drawSize
+        );
+      } else {
+        ctx.fillStyle = '#facc15';
+        ctx.beginPath();
+        ctx.arc(gx, gy, drawSize * 0.38, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -653,7 +1085,11 @@ export class SnakeGame {
       const segSize = cell - inset * 2;
       const radius = isTail ? segSize * 0.46 : segSize * 0.34;
 
-      ctx.fillStyle = i % 2 === 0 ? '#22c55e' : '#16a34a';
+      if (hc) {
+        ctx.fillStyle = i % 2 === 0 ? '#38bdf8' : '#0284c7';
+      } else {
+        ctx.fillStyle = i % 2 === 0 ? '#22c55e' : '#16a34a';
+      }
       this.#drawRoundedRect(
         ctx,
         seg.x * cell + inset,
@@ -664,12 +1100,12 @@ export class SnakeGame {
       );
       ctx.fill();
 
-      ctx.strokeStyle = 'rgba(5, 46, 22, 0.38)';
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = hc ? '#ffffff' : 'rgba(5, 46, 22, 0.38)';
+      ctx.lineWidth = hc ? 1.5 : 1;
       ctx.stroke();
 
       if (!isTail) {
-        ctx.fillStyle = 'rgba(187, 247, 208, 0.14)';
+        ctx.fillStyle = hc ? 'rgba(224, 242, 254, 0.22)' : 'rgba(187, 247, 208, 0.14)';
         this.#drawRoundedRect(
           ctx,
           seg.x * cell + inset + 2,
@@ -688,25 +1124,38 @@ export class SnakeGame {
       const hx = (head.x + 0.5) * cell;
       const hy = (head.y + 0.5) * cell;
       const headSize = cell * 1.06;
+      const headImg = hc ? this.sprites.headHc : this.sprites.head;
 
       ctx.save();
       ctx.translate(hx, hy);
       ctx.rotate(this.direction.angle);
-      if (this.sprites.head) {
+      if (headImg) {
         ctx.drawImage(
-          this.sprites.head,
+          headImg,
           -headSize / 2,
           -headSize / 2,
           headSize,
           headSize
         );
       } else {
-        ctx.fillStyle = '#22c55e';
+        ctx.fillStyle = hc ? '#38bdf8' : '#22c55e';
         this.#drawRoundedRect(ctx, -cell * 0.45, -cell * 0.45, cell * 0.9, cell * 0.9, cell * 0.3);
         ctx.fill();
       }
       ctx.restore();
     }
+
+    // 5. Pooled particles
+    for (const p of this.particles) {
+      if (!p.active) continue;
+      const alpha = Math.max(0, p.lifeMs / p.maxLifeMs);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x * cell, p.y * cell, p.size * (0.6 + 0.4 * alpha), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
 
     ctx.restore();
   }
@@ -738,9 +1187,13 @@ export class SnakeGame {
 
   #syncHud() {
     if (this.headless) return;
+    const cfg = this.getDifficultyConfig();
 
     if (this.dom.scoreValue) {
       this.dom.scoreValue.textContent = String(this.score);
+    }
+    if (this.dom.bestLabel) {
+      this.dom.bestLabel.textContent = `Best · ${cfg.label}`;
     }
     if (this.dom.bestValue) {
       this.dom.bestValue.textContent = String(this.bestScore);
@@ -778,25 +1231,38 @@ export class SnakeGame {
     this.dom.overlay.hidden = !showOverlay;
     if (!showOverlay) return;
 
+    this.#syncDifficultyUi();
+    this.#syncVisualOptionsUi();
+    const cfg = this.getDifficultyConfig();
+
     if (this.state === SnakeGame.STATES.TITLE) {
       this.dom.overlayEmblem.hidden = false;
       this.dom.newBestBadge.hidden = true;
       this.dom.overlayStats.hidden = true;
+      if (this.dom.leaderboardForm) this.dom.leaderboardForm.hidden = true;
+      if (this.dom.difficultyPicker) this.dom.difficultyPicker.hidden = false;
+      if (this.dom.visualOptions) this.dom.visualOptions.hidden = false;
       this.dom.secondaryCta.hidden = true;
       this.dom.overlayTitle.textContent = 'Orchard Snake';
       this.dom.overlaySubtitle.textContent =
-        'Collect apples, grow longer, and avoid the walls and your own tail.';
+        'Collect apples, grab bonus golden apples, and avoid walls.';
       this.dom.primaryCta.textContent = this.spritesLoaded
         ? 'Start Game'
         : 'Loading Sprites...';
       this.dom.primaryCta.disabled = !this.spritesLoaded;
       this.dom.controlHints.textContent =
-        'Arrows / WASD Move · Space / P Pause · Enter Start';
+        'Arrows / WASD Move · Space / P Pause · L Leaderboard';
     } else if (this.state === SnakeGame.STATES.PAUSED) {
       this.dom.overlayEmblem.hidden = true;
       this.dom.newBestBadge.hidden = true;
       this.dom.overlayStats.hidden = false;
+      if (this.dom.leaderboardForm) this.dom.leaderboardForm.hidden = true;
+      if (this.dom.difficultyPicker) this.dom.difficultyPicker.hidden = true;
+      if (this.dom.visualOptions) this.dom.visualOptions.hidden = false;
       this.dom.finalScoreValue.textContent = String(this.score);
+      if (this.dom.finalBestLabel) {
+        this.dom.finalBestLabel.textContent = `Best (${cfg.label})`;
+      }
       this.dom.finalBestValue.textContent = String(this.bestScore);
       this.dom.secondaryCta.hidden = false;
       this.dom.secondaryCta.textContent = 'Restart';
@@ -811,13 +1277,34 @@ export class SnakeGame {
       this.dom.overlayEmblem.hidden = true;
       this.dom.newBestBadge.hidden = !(this.isNewBest && this.score > 0);
       this.dom.overlayStats.hidden = false;
+      if (this.dom.difficultyPicker) this.dom.difficultyPicker.hidden = false;
+      if (this.dom.visualOptions) this.dom.visualOptions.hidden = true;
+      if (this.dom.leaderboardForm) {
+        this.dom.leaderboardForm.hidden = this.score <= 0;
+      }
+      if (this.dom.submitScoreBtn) {
+        this.dom.submitScoreBtn.disabled = this.scoreSubmitted || this.submittingScore;
+        this.dom.submitScoreBtn.textContent = this.scoreSubmitted
+          ? 'Saved'
+          : this.submittingScore
+            ? 'Saving...'
+            : 'Save Score';
+      }
+      if (this.dom.submitFeedback) {
+        this.dom.submitFeedback.hidden = !this.submitMessage;
+        this.dom.submitFeedback.textContent = this.submitMessage;
+        this.dom.submitFeedback.classList.toggle('is-error', this.submitIsError);
+      }
       this.dom.finalScoreValue.textContent = String(this.score);
+      if (this.dom.finalBestLabel) {
+        this.dom.finalBestLabel.textContent = `Best (${cfg.label})`;
+      }
       this.dom.finalBestValue.textContent = String(this.bestScore);
       this.dom.secondaryCta.hidden = true;
       this.dom.overlayTitle.textContent = this.isWin ? 'Orchard Mastered!' : 'Game Over';
       this.dom.overlaySubtitle.textContent = this.isWin
         ? 'You filled every tile on the board!'
-        : 'You crashed! Try another run to beat your record.';
+        : 'You crashed! Save your score or try another run.';
       this.dom.primaryCta.textContent = 'Play Again';
       this.dom.primaryCta.disabled = false;
       this.dom.controlHints.textContent =
@@ -825,9 +1312,196 @@ export class SnakeGame {
     }
   }
 
+  #syncDifficultyUi() {
+    if (this.headless) return;
+    const cfg = this.getDifficultyConfig();
+    if (this.dom.difficultyButtons) {
+      for (const btn of this.dom.difficultyButtons) {
+        const isSelected = btn.dataset.difficulty === cfg.id;
+        btn.setAttribute('aria-pressed', String(isSelected));
+      }
+    }
+    if (this.dom.difficultyMeta) {
+      this.dom.difficultyMeta.textContent =
+        `${cfg.initialTickMs}ms start · -${cfg.speedStepMs}ms per apple · ${cfg.minTickMs}ms cap`;
+    }
+  }
+
+  #syncVisualOptionsUi() {
+    if (this.headless) return;
+    if (this.dom.contrastToggle) {
+      this.dom.contrastToggle.setAttribute('aria-pressed', String(this.highContrast));
+      this.dom.contrastToggle.textContent = `High Contrast: ${this.highContrast ? 'On' : 'Off'}`;
+    }
+    if (this.dom.shakeToggle) {
+      this.dom.shakeToggle.setAttribute('aria-pressed', String(this.screenShake));
+      this.dom.shakeToggle.textContent = `Screen Shake: ${this.screenShake ? 'On' : 'Off'}`;
+    }
+  }
+
+  #applyHighContrastClass() {
+    if (this.headless || typeof document === 'undefined' || !document.body) return;
+    document.body.classList.toggle('high-contrast', this.highContrast);
+  }
+
+  async openLeaderboard() {
+    if (this.headless || !this.dom.leaderboardModal) return;
+    if (this.state === SnakeGame.STATES.PLAYING) {
+      this.stateBeforeLeaderboard = SnakeGame.STATES.PLAYING;
+      this.pauseGame();
+    } else {
+      this.stateBeforeLeaderboard = null;
+    }
+    this.leaderboardOpen = true;
+    this.dom.leaderboardModal.hidden = false;
+    this.#syncLeaderboardFilterUi();
+    await this.fetchLeaderboard();
+  }
+
+  closeLeaderboard() {
+    if (this.headless || !this.dom.leaderboardModal) return;
+    this.leaderboardOpen = false;
+    this.dom.leaderboardModal.hidden = true;
+    if (this.stateBeforeLeaderboard === SnakeGame.STATES.PLAYING) {
+      this.stateBeforeLeaderboard = null;
+      this.resumeGame();
+    }
+  }
+
+  setLeaderboardFilter(filter) {
+    const valid = filter === 'all' || Object.prototype.hasOwnProperty.call(SnakeGame.DIFFICULTIES, filter);
+    this.leaderboardFilter = valid ? filter : 'all';
+    this.#syncLeaderboardFilterUi();
+    this.fetchLeaderboard();
+  }
+
+  #syncLeaderboardFilterUi() {
+    if (!this.dom.filterButtons) return;
+    for (const btn of this.dom.filterButtons) {
+      btn.setAttribute('aria-pressed', String(btn.dataset.filter === this.leaderboardFilter));
+    }
+  }
+
+  async fetchLeaderboard() {
+    if (this.headless || !this.dom.leaderboardStatus || !this.dom.leaderboardTable || !this.dom.leaderboardTbody) {
+      return;
+    }
+
+    this.dom.leaderboardStatus.hidden = false;
+    this.dom.leaderboardStatus.textContent = 'Loading scores...';
+    this.dom.leaderboardTable.hidden = true;
+
+    try {
+      const response = await fetch(
+        `/api/leaderboard?difficulty=${encodeURIComponent(this.leaderboardFilter)}&limit=20`
+      );
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const data = await response.json();
+      const entries = Array.isArray(data.entries) ? data.entries : [];
+
+      if (entries.length === 0) {
+        this.dom.leaderboardStatus.hidden = false;
+        this.dom.leaderboardStatus.textContent = 'No scores recorded yet for this mode.';
+        this.dom.leaderboardTable.hidden = true;
+        return;
+      }
+
+      this.dom.leaderboardTbody.replaceChildren();
+      entries.forEach((entry, index) => {
+        const row = document.createElement('tr');
+        const rankCell = document.createElement('td');
+        rankCell.textContent = String(index + 1);
+
+        const nameCell = document.createElement('td');
+        nameCell.textContent = String(entry.playerName || 'Player');
+
+        const modeCell = document.createElement('td');
+        modeCell.className = 'col-mode';
+        modeCell.textContent = String(entry.difficulty || 'normal');
+
+        const scoreCell = document.createElement('td');
+        scoreCell.className = 'col-score';
+        scoreCell.textContent = String(entry.score ?? 0);
+
+        row.append(rankCell, nameCell, modeCell, scoreCell);
+        this.dom.leaderboardTbody.appendChild(row);
+      });
+
+      this.dom.leaderboardStatus.hidden = true;
+      this.dom.leaderboardTable.hidden = false;
+    } catch {
+      this.dom.leaderboardStatus.hidden = false;
+      this.dom.leaderboardStatus.textContent = 'Unable to reach server leaderboard.';
+      this.dom.leaderboardTable.hidden = true;
+    }
+  }
+
+  async submitScoreToServer(rawName) {
+    if (this.headless || this.scoreSubmitted || this.submittingScore || this.score <= 0) {
+      return;
+    }
+
+    const playerName = String(rawName || '').trim().slice(0, 20);
+    if (!playerName) {
+      this.submitMessage = 'Please enter your name first.';
+      this.submitIsError = true;
+      this.#syncOverlay();
+      return;
+    }
+
+    this.#savePlayerName(playerName);
+    this.submittingScore = true;
+    this.submitMessage = '';
+    this.submitIsError = false;
+    this.#syncOverlay();
+
+    try {
+      const response = await fetch('/api/leaderboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerName,
+          score: this.score,
+          difficulty: this.difficulty,
+          apples: this.applesEaten,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || `HTTP ${response.status}`);
+      }
+
+      this.scoreSubmitted = true;
+      this.submittingScore = false;
+      const cfg = this.getDifficultyConfig();
+      this.submitMessage = `Saved! Ranked #${payload.rank} on ${cfg.label}.`;
+      this.submitIsError = false;
+      this.#syncOverlay();
+    } catch (err) {
+      this.submittingScore = false;
+      this.submitMessage = err instanceof Error ? err.message : 'Failed to save score.';
+      this.submitIsError = true;
+      this.#syncOverlay();
+    }
+  }
+
   #blurActiveElement() {
     if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
+    }
+  }
+
+  #prefersReducedMotion() {
+    try {
+      return (
+        typeof window !== 'undefined' &&
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      );
+    } catch {
+      return false;
     }
   }
 
@@ -842,7 +1516,21 @@ export class SnakeGame {
     return null;
   }
 
-  #loadBestScore() {
+  #loadAllBestScores() {
+    const scores = { casual: 0, normal: 0, hard: 0 };
+    for (const mode of Object.keys(SnakeGame.DIFFICULTIES)) {
+      scores[mode] = this.#loadBestScoreForDifficulty(mode);
+    }
+    if (scores.normal === 0) {
+      const legacy = this.#loadLegacyBestScore();
+      if (legacy > 0) {
+        scores.normal = legacy;
+      }
+    }
+    return scores;
+  }
+
+  #loadLegacyBestScore() {
     try {
       if (!this.storage) return 0;
       const raw = this.storage.getItem(SnakeGame.BEST_SCORE_KEY);
@@ -853,12 +1541,89 @@ export class SnakeGame {
     }
   }
 
-  #saveBestScore(value) {
+  #loadBestScoreForDifficulty(mode) {
+    try {
+      if (!this.storage) return 0;
+      const raw = this.storage.getItem(`${SnakeGame.BEST_SCORE_PREFIX}${mode}`);
+      const parsed = Number.parseInt(raw || '0', 10);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  #saveBestScoreForDifficulty(mode, value) {
     try {
       if (!this.storage) return;
-      this.storage.setItem(SnakeGame.BEST_SCORE_KEY, String(value));
+      this.storage.setItem(`${SnakeGame.BEST_SCORE_PREFIX}${mode}`, String(value));
+      if (mode === 'normal') {
+        this.storage.setItem(SnakeGame.BEST_SCORE_KEY, String(value));
+      }
     } catch {
       // Ignore storage errors in private browsing mode
+    }
+  }
+
+  #resolveDifficulty(mode) {
+    return Object.prototype.hasOwnProperty.call(SnakeGame.DIFFICULTIES, mode)
+      ? mode
+      : 'normal';
+  }
+
+  #loadDifficulty() {
+    try {
+      if (!this.storage) return 'normal';
+      return this.#resolveDifficulty(this.storage.getItem(SnakeGame.DIFFICULTY_KEY));
+    } catch {
+      return 'normal';
+    }
+  }
+
+  #saveDifficulty(mode) {
+    try {
+      if (!this.storage) return;
+      this.storage.setItem(SnakeGame.DIFFICULTY_KEY, mode);
+    } catch {
+      // Ignore storage errors in private browsing mode
+    }
+  }
+
+  #loadPlayerName() {
+    try {
+      if (!this.storage) return '';
+      return String(this.storage.getItem(SnakeGame.PLAYER_NAME_KEY) || '').slice(0, 20);
+    } catch {
+      return '';
+    }
+  }
+
+  #savePlayerName(name) {
+    try {
+      if (!this.storage) return;
+      this.storage.setItem(SnakeGame.PLAYER_NAME_KEY, name);
+    } catch {
+      // Ignore storage errors
+    }
+  }
+
+  #loadBooleanSetting(key, fallback) {
+    try {
+      if (!this.storage) return fallback;
+      const raw = this.storage.getItem(key);
+      if (raw === 'true') return true;
+      if (raw === 'false') return false;
+      return fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  #saveBooleanSetting(key, value) {
+    try {
+      if (!this.storage) return;
+      this.storage.setItem(key, String(Boolean(value)));
+    } catch {
+      // Ignore storage errors
     }
   }
 
@@ -899,6 +1664,21 @@ export class SnakeGame {
         gain.connect(ctx.destination);
         osc.start(now);
         osc.stop(now + 0.13);
+      } else if (type === 'golden') {
+        const notes = [659.25, 880, 1174.66];
+        notes.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          const start = now + idx * 0.045;
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, start);
+          gain.gain.setValueAtTime(0.11, start);
+          gain.gain.exponentialRampToValueAtTime(0.001, start + 0.14);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(start);
+          osc.stop(start + 0.15);
+        });
       } else if (type === 'crash') {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
