@@ -784,6 +784,9 @@ export class SnakeGame {
 
   #bindEvents() {
     window.addEventListener('resize', this.#boundHandlers.resize);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', this.#boundHandlers.resize);
+    }
     window.addEventListener('keydown', this.#boundHandlers.keydown);
     document.addEventListener('visibilitychange', this.#boundHandlers.visibilitychange);
 
@@ -952,18 +955,17 @@ export class SnakeGame {
     if (!this.dom.canvas || !this.dom.boardStage) return;
 
     const hudEl = document.querySelector('.hud-bar');
-    const dpadEl = document.querySelector('.dpad');
-    const hudHeight = hudEl ? hudEl.getBoundingClientRect().height : 64;
-    const dpadVisible = dpadEl && window.getComputedStyle(dpadEl).display !== 'none';
-    const dpadHeight = dpadVisible ? dpadEl.getBoundingClientRect().height : 0;
+    const stageRect = this.dom.boardStage.getBoundingClientRect();
+    const framePadding = 14;
+    const viewportWidth = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+    const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
 
-    const verticalOverhead = hudHeight + dpadHeight + (dpadVisible ? 56 : 52);
-    const availW = window.innerWidth - 44;
-    const availH = window.innerHeight - verticalOverhead;
+    const availW = Math.min(stageRect.width - framePadding, viewportWidth - 20);
+    const availH = Math.min(stageRect.height - framePadding, viewportHeight - 20);
     const maxDimension = Math.min(availW, availH, 588);
-    const clamped = Math.max(240, maxDimension);
+    const clamped = Math.max(160, maxDimension);
     const snapped = Math.floor(clamped / SnakeGame.GRID_SIZE) * SnakeGame.GRID_SIZE;
-    const size = Math.max(240, snapped);
+    const size = Math.max(160, Math.min(snapped, clamped));
 
     this.canvasSize = size;
     this.dpr = Math.min(window.devicePixelRatio || 1, 3);

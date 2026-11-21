@@ -65,9 +65,10 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  gap: clamp(6px, 1.2vh, 14px);
   width: 100%;
   height: 100dvh;
+  min-height: 0;
   padding: max(12px, env(safe-area-inset-top)) 16px max(14px, env(safe-area-inset-bottom));
 }
 
@@ -197,9 +198,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   width: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 
 .board-frame {
@@ -563,8 +565,8 @@ body {
 
 @media (pointer: coarse), (max-width: 768px) {
   .game-shell {
-    gap: 10px;
-    padding: max(10px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+    gap: clamp(6px, 1vh, 10px);
+    padding: max(8px, env(safe-area-inset-top)) 10px max(8px, env(safe-area-inset-bottom));
   }
 
   .hud-bar {
@@ -705,7 +707,100 @@ body {
   }
 }
 
+@media (max-width: 360px) {
+  .hud-icon,
+  .hud-divider {
+    display: none;
+  }
+
+  .hud-stats {
+    gap: 8px;
+  }
+
+  .hud-stat {
+    gap: 0;
+  }
+}
+
+@media (max-height: 600px) and (max-width: 768px) {
+  .overlay-card {
+    padding: 8px 10px;
+  }
+
+  .overlay-emblem,
+  .control-hints {
+    display: none;
+  }
+
+  .overlay-title {
+    font-size: 18px;
+    margin-bottom: 2px;
+  }
+
+  .overlay-subtitle {
+    margin-bottom: 6px;
+  }
+
+  .overlay-stats,
+  .difficulty-picker,
+  .visual-options {
+    margin-bottom: 6px;
+  }
+}
+
+@media (max-height: 480px) and (orientation: landscape) {
+  .overlay-card {
+    width: min(320px, calc(100% - 8px));
+    max-height: 100%;
+    margin: 0;
+    padding: 6px 10px;
+  }
+
+  .overlay-emblem,
+  .overlay-subtitle,
+  .overlay-stats,
+  .control-hints,
+  .visual-options {
+    display: none;
+  }
+
+  .overlay-title {
+    font-size: 16px;
+    margin: 0 0 4px;
+  }
+
+  .difficulty-picker {
+    margin-bottom: 6px;
+  }
+
+  .difficulty-segmented {
+    padding: 2px;
+  }
+
+  .difficulty-btn {
+    min-height: 28px;
+  }
+
+  .difficulty-meta {
+    font-size: 10px;
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    min-height: 34px;
+  }
+}
+
 @media (max-height: 640px) and (max-width: 768px) {
+  .game-shell {
+    gap: 5px;
+  }
+
+  .hud-bar {
+    padding-top: 5px;
+    padding-bottom: 5px;
+  }
+
   .dpad {
     grid-template-columns: repeat(3, 50px);
     grid-template-rows: repeat(2, 46px);
