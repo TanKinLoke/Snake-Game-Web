@@ -7,6 +7,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const svg = await readFile(path.join(root, 'public', 'icon-art.svg'));
 const sizes = [
   ['apple-touch-icon.png', 180],
+  ['apple-touch-icon-v2.png', 180],
   ['icon-192.png', 192],
   ['icon-512.png', 512],
   ['favicon-32x32.png', 32],
